@@ -1,39 +1,41 @@
-name: Update Repository structure
+name: Auto Update Repo Structure
 
 on:
-  schedule:
-    - cron: '0 * * * *'  # Run every hour
-  workflow_dispatch:  # Allow manual triggering
   push:
     branches:
       - main
-      - master
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * 1' # Runs every Monday
 
 jobs:
-  detect-and-update-structure:
+  update-structure:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - name: Set up Python (Optional)
+        uses: actions/setup-python@v4
         with:
-          python-version: 3.12
+          python-version: '3.9'
 
-      - name: Install dependencies
+      - name: Ensure Correct Repo Structure
         run: |
-          python -m pip install --upgrade pip
-          pip install PyGithub
+          mkdir -p src tests docs
+          mv scripts/*.sh tools/ 2>/dev/null || true
+          mv README.md docs/ 2>/dev/null || true
+          touch src/.gitkeep tests/.gitkeep docs/.gitkeep
 
-      - name: Run update script
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --cached --quiet || git commit -m "Auto-update repo structure"
+          git push origin main
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python .github/scripts/update_structure.py
-
-      - name: Commit and push if changed
-        run: |
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com" 
-          git config user.name "github-actions[bot]"
-          git add . 
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update repo structure" && git push)
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
