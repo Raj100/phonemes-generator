@@ -4,27 +4,17 @@
 │   └── workflows
 │       └── update-repository-structure.yml
 ├── .gitignore
-├── Project_Structure.txt
 ├── api
 │   ├── cmudict
 │   └── index.py
 ├── app.py
-├── cmudict
-│   ├── README
-│   └── cmudict
 ├── cmudict.py
-├── cmudict.zip
-├── docs
-│   └── .gitkeep
 ├── render.yaml
-├── repo-structure.txt
+├── repository-structure.txt
 ├── requirements.txt
 ├── runtime.txt
-├── src
-│   └── .gitkeep
 ├── tests
 │   └── .gitkeep
-├── vercel.json
-└── wsgi.py
+└── vercel.json
 
-8 directories, 20 files
+5 directories, 13 files
