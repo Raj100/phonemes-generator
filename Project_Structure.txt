@@ -1,7 +1,0 @@
-phoneme-generator/
-│── api/
-    │──index.py
-│── requirements.txt
-│── vercel.json
-│── uploads/ (ignored in .gitignore)
-│── runtime.txt

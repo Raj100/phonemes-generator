@@ -8,7 +8,7 @@ on:
     - cron: '0 0 * * 1' # Runs every Monday
 
 permissions:
-  contents: write  # ✅ Ensure GITHUB_TOKEN has write access
+  contents: write  
 
 jobs:
   update-structure:
@@ -20,7 +20,7 @@ jobs:
 
       - name: Generate Repo Structure
         run: |
-          tree -a -I ".git|node_modules" > repo-structure.txt
+          tree -a -I ".git|node_modules" > repository-structure.txt
 
       - name: Commit and Push Changes
         run: |
