@@ -1,8 +1,6 @@
 .
 ├── .DS_Store
 ├── .github
-│   ├── scripts
-│   │   └── update_structure.py
 │   └── workflows
 │       └── update-repository-structure.yml
 ├── .gitignore
@@ -29,4 +27,4 @@
 ├── vercel.json
 └── wsgi.py
 
-9 directories, 21 files
+8 directories, 20 files
