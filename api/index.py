@@ -1,68 +1,69 @@
 from flask import Flask, request, jsonify
 import speech_recognition as sr
+import nltk
+from nltk.corpus import cmudict
+from pydub import AudioSegment
 import os
-from io import BytesIO
 
 app = Flask(__name__)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CMU_DICT_PATH = os.path.join(BASE_DIR, "cmudict")
+# Load CMU Pronouncing Dictionary
+nltk.download('cmudict')
+pron_dict = cmudict.dict()
 
-def load_cmu_dict():
-    cmu_dict = {}
-    if not os.path.exists(CMU_DICT_PATH):
-        print(f"Error: CMU Pronouncing Dictionary not found at {CMU_DICT_PATH}")
-        return cmu_dict 
-    
-    with open(CMU_DICT_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) > 1:
-                word = parts[0].lower() 
-                phonemes = parts[1:]
-                cmu_dict[word] = phonemes
-    return cmu_dict
+def convert_audio(file_path):
+    """ Converts any audio format to WAV (required for SpeechRecognition) """
+    wav_path = file_path.rsplit(".", 1)[0] + ".wav"
+    audio = AudioSegment.from_file(file_path)
+    audio = audio.set_channels(1).set_frame_rate(16000)
+    audio.export(wav_path, format="wav")
+    return wav_path
 
-# Load pronunciation dictionary
-pron_dict = load_cmu_dict()
+def convert_to_text(file_path):
+    """ Convert audio to text using Google Web Speech API (better than CMU Sphinx) """
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(file_path) as source:
+        audio = recognizer.record(source)
+    try:
+        return recognizer.recognize_google(audio).lower()
+    except sr.UnknownValueError:
+        return None
+    except sr.RequestError:
+        return None
 
-@app.route('/')
+def text_to_phonemes(text):
+    """ Convert recognized words to phonemes using CMU Pronouncing Dictionary """
+    words = text.split()
+    phonemes = [pron_dict[word][0] if word in pron_dict else ["?"] for word in words]
+    return phonemes
+
+@app.route("/")
 def home():
-    return 'Hello, World! Flask API is running.'
+    return "Hello! This is a Speech-to-Phoneme API using Flask."
 
-@app.route('/about')
-def about():
-    return 'This API converts speech to phonemes using CMU Pronouncing Dictionary.'
-
-@app.route('/upload', methods=['POST'])
+@app.route("/upload", methods=["POST"])
 def upload():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["file"]
-    phonemes = convert_to_phonemes(file)
-    return jsonify({"filename": file.filename, "phonemes": phonemes})
+    file_path = os.path.join("uploads", file.filename)
+    file.save(file_path)
 
-def convert_to_phonemes(file):
-    recognizer = sr.Recognizer()
+    # Convert to WAV (if needed)
+    if not file.filename.lower().endswith(".wav"):
+        file_path = convert_audio(file_path)
 
-    with BytesIO(file.read()) as audio_file:
-        with sr.AudioFile(audio_file) as source:
-            audio = recognizer.record(source)
+    # Convert Speech to Text
+    text = convert_to_text(file_path)
+    if text is None:
+        return jsonify({"error": "Speech not recognized"}), 400
 
-    try:
-        text = recognizer.recognize_sphinx(audio)
-        phonemes = text_to_phonemes(text)
-        return phonemes
-    except sr.UnknownValueError:
-        return "Speech not recognized"
-    except sr.RequestError:
-        return "Error with speech recognition service"
+    # Convert Text to Phonemes
+    phonemes = text_to_phonemes(text)
 
-def text_to_phonemes(text):
-    words = text.lower().split()
-    phonemes = [pron_dict[word] if word in pron_dict else ["?"] for word in words]
-    return phonemes
+    return jsonify({"filename": file.filename, "text": text, "phonemes": phonemes})
 
 if __name__ == "__main__":
+    os.makedirs("uploads", exist_ok=True)
     app.run(debug=True)
