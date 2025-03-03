@@ -1,75 +1,56 @@
-from flask import Flask, request, jsonify
-import speech_recognition as sr
 import os
-from io import BytesIO
+import nltk
+import speech_recognition as sr
+from flask import Flask, request, jsonify
+from nltk.corpus import cmudict
+
+# Download CMU Pronouncing Dictionary
+nltk.download("cmudict")
+cmu_dict = cmudict.dict()
 
 app = Flask(__name__)
 
-# CMU Pronouncing Dictionary Path
-CMU_DICT_PATH = "./cmudict"
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def load_cmu_dict():
-    """Load CMU Pronouncing Dictionary into a dictionary"""
-    cmu_dict = {}
-    if not os.path.exists(CMU_DICT_PATH):
-        print(f"Error: CMU Pronouncing Dictionary not found at {CMU_DICT_PATH}")
-        return cmu_dict 
-
-    with open(CMU_DICT_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            parts = line.strip().split()
-            if len(parts) > 1:
-                word = parts[0].lower() 
-                phonemes = parts[1:]
-                cmu_dict[word] = phonemes
-    return cmu_dict
-
-# Load pronunciation dictionary
-pron_dict = load_cmu_dict()
-
-@app.route('/')
+@app.route("/")
 def home():
-    return 'Hello, World! Flask API is running on Render.'
+    return jsonify({"message": "Flask API for phoneme generation is running!"})
 
-@app.route('/about')
-def about():
-    return 'This API converts speech to phonemes using CMU Pronouncing Dictionary.'
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    """Handles audio file uploads and converts speech to phonemes"""
+@app.route("/upload", methods=["POST"])
+def upload_audio():
     if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+        return jsonify({"error": "No file part"}), 400
 
     file = request.files["file"]
+    
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
 
-    # Convert audio to phonemes directly from memory
-    phonemes = convert_to_phonemes(file)
+    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(filepath)
 
-    return jsonify({"filename": file.filename, "phonemes": phonemes})
-
-def convert_to_phonemes(file):
-    """Convert speech to phonemes using CMU dictionary"""
+    # Convert speech to text
     recognizer = sr.Recognizer()
-
-    with BytesIO(file.read()) as audio_file:
-        with sr.AudioFile(audio_file) as source:
-            audio = recognizer.record(source)
-
+    with sr.AudioFile(filepath) as source:
+        audio = recognizer.record(source)
+    
     try:
-        text = recognizer.recognize_sphinx(audio)  # Use PocketSphinx for offline recognition
-        phonemes = text_to_phonemes(text)
-        return phonemes
+        text = recognizer.recognize_google(audio)
     except sr.UnknownValueError:
-        return "Speech not recognized"
+        return jsonify({"error": "Could not understand audio"}), 400
     except sr.RequestError:
-        return "Error with speech recognition service"
+        return jsonify({"error": "Error with speech recognition service"}), 500
 
-def text_to_phonemes(text):
-    """Convert recognized text into phonemes using CMU dictionary"""
+    # Get phonemes
     words = text.lower().split()
-    phonemes = [pron_dict[word] if word in pron_dict else ["?"] for word in words]
-    return phonemes
+    phonemes = {word: cmu_dict.get(word, ["Not found"]) for word in words}
+
+    return jsonify({"text": text, "phonemes": phonemes})
+
+# Vercel requires the app to be called as 'app'
+def handler(event, context):
+    return app(event, context)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run()
