@@ -4,14 +4,11 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
   schedule:
     - cron: '0 0 * * 1' # Runs every Monday
 
 permissions:
-  contents: write  # ✅ Fixes the permission issue
+  contents: write  # ✅ Ensure GITHUB_TOKEN has write access
 
 jobs:
   update-structure:
@@ -21,16 +18,15 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Ensure Correct Repo Structure
+      - name: Generate Repo Structure
         run: |
-          mkdir -p src tests docs
-          touch src/.gitkeep tests/.gitkeep docs/.gitkeep
+          tree -a -I ".git|node_modules" > repo-structure.txt
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
+          git add repo-structure.txt
           git diff --cached --quiet || git commit -m "Auto-update repo structure"
           git push origin main
         env:
