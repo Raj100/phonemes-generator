@@ -1,69 +1,75 @@
 from flask import Flask, request, jsonify
 import speech_recognition as sr
-import nltk
-from nltk.corpus import cmudict
-from pydub import AudioSegment
 import os
+from io import BytesIO
 
 app = Flask(__name__)
 
-# Load CMU Pronouncing Dictionary
-nltk.download('cmudict')
-pron_dict = cmudict.dict()
+# CMU Pronouncing Dictionary Path
+CMU_DICT_PATH = "./cmudict"
 
-def convert_audio(file_path):
-    """ Converts any audio format to WAV (required for SpeechRecognition) """
-    wav_path = file_path.rsplit(".", 1)[0] + ".wav"
-    audio = AudioSegment.from_file(file_path)
-    audio = audio.set_channels(1).set_frame_rate(16000)
-    audio.export(wav_path, format="wav")
-    return wav_path
+def load_cmu_dict():
+    """Load CMU Pronouncing Dictionary into a dictionary"""
+    cmu_dict = {}
+    if not os.path.exists(CMU_DICT_PATH):
+        print(f"Error: CMU Pronouncing Dictionary not found at {CMU_DICT_PATH}")
+        return cmu_dict 
 
-def convert_to_text(file_path):
-    """ Convert audio to text using Google Web Speech API (better than CMU Sphinx) """
-    recognizer = sr.Recognizer()
-    with sr.AudioFile(file_path) as source:
-        audio = recognizer.record(source)
-    try:
-        return recognizer.recognize_google(audio).lower()
-    except sr.UnknownValueError:
-        return None
-    except sr.RequestError:
-        return None
+    with open(CMU_DICT_PATH, "r", encoding="utf-8") as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) > 1:
+                word = parts[0].lower() 
+                phonemes = parts[1:]
+                cmu_dict[word] = phonemes
+    return cmu_dict
 
-def text_to_phonemes(text):
-    """ Convert recognized words to phonemes using CMU Pronouncing Dictionary """
-    words = text.split()
-    phonemes = [pron_dict[word][0] if word in pron_dict else ["?"] for word in words]
-    return phonemes
+# Load pronunciation dictionary
+pron_dict = load_cmu_dict()
 
-@app.route("/")
+@app.route('/')
 def home():
-    return "Hello! This is a Speech-to-Phoneme API using Flask."
+    return 'Hello, World! Flask API is running on Render.'
 
-@app.route("/upload", methods=["POST"])
+@app.route('/about')
+def about():
+    return 'This API converts speech to phonemes using CMU Pronouncing Dictionary.'
+
+@app.route('/upload', methods=['POST'])
 def upload():
+    """Handles audio file uploads and converts speech to phonemes"""
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["file"]
-    file_path = os.path.join("uploads", file.filename)
-    file.save(file_path)
 
-    # Convert to WAV (if needed)
-    if not file.filename.lower().endswith(".wav"):
-        file_path = convert_audio(file_path)
+    # Convert audio to phonemes directly from memory
+    phonemes = convert_to_phonemes(file)
 
-    # Convert Speech to Text
-    text = convert_to_text(file_path)
-    if text is None:
-        return jsonify({"error": "Speech not recognized"}), 400
+    return jsonify({"filename": file.filename, "phonemes": phonemes})
 
-    # Convert Text to Phonemes
-    phonemes = text_to_phonemes(text)
+def convert_to_phonemes(file):
+    """Convert speech to phonemes using CMU dictionary"""
+    recognizer = sr.Recognizer()
 
-    return jsonify({"filename": file.filename, "text": text, "phonemes": phonemes})
+    with BytesIO(file.read()) as audio_file:
+        with sr.AudioFile(audio_file) as source:
+            audio = recognizer.record(source)
+
+    try:
+        text = recognizer.recognize_sphinx(audio)  # Use PocketSphinx for offline recognition
+        phonemes = text_to_phonemes(text)
+        return phonemes
+    except sr.UnknownValueError:
+        return "Speech not recognized"
+    except sr.RequestError:
+        return "Error with speech recognition service"
+
+def text_to_phonemes(text):
+    """Convert recognized text into phonemes using CMU dictionary"""
+    words = text.lower().split()
+    phonemes = [pron_dict[word] if word in pron_dict else ["?"] for word in words]
+    return phonemes
 
 if __name__ == "__main__":
-    os.makedirs("uploads", exist_ok=True)
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)
