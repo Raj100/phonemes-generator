@@ -1,0 +1,4 @@
+Flask==2.2.5
+speechrecognition==3.10.0
+nltk==3.8.1
+numpy==1.24.4
